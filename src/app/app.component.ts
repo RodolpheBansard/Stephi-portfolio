@@ -3,6 +3,9 @@ import * as THREE from 'three'
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import gsap from 'gsap';
 import GUI from 'lil-gui';
+import {DRACOLoader} from "three/examples/jsm/loaders/DRACOLoader";
+import {GLTFLoader} from "three/examples/jsm/loaders/GLTFLoader";
+import {Mesh, Object3D} from "three";
 
 @Component({
   selector: 'app-root',
@@ -34,46 +37,76 @@ export class AppComponent implements AfterViewInit{
     height: window.innerHeight
   };
 
-  parameters = {
-    spin: () => {
-      gsap.to(this.mesh.rotation,{duration:1,x:this.mesh.rotation.x + Math.PI *2})
+  lilGuiAction = {
+    animateCamera: () => {
+      gsap.to(this.camera.position,{duration:1,x:1,z:0,y:2})
+
+    },
+    animateFrame:() => {
+      gsap.to(this.frame.scale,{duration:0.3,x:0,z:0,y:0})
     }
   }
 
+  // parameters = {
+  //   spin: () => {
+  //     gsap.to(this.mesh.rotation,{duration:1,x:this.mesh.rotation.x + Math.PI *2})
+  //   }
+  // }
+
   gui: GUI;
   scene : THREE.Scene;
-  mesh: THREE.Mesh;
   camera : THREE.PerspectiveCamera;
   renderer! : THREE.WebGLRenderer;
+  frame!: Object3D;
 
   constructor() {
+
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load('assets/images/lutin.jpg',
+      (test) => {
+        console.log(test.image.width)
+        console.log(test.image.height)
+      });
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('assets/draco/')
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader);
+    gltfLoader.load('assets/portfolio.glb', (gltf) => {
+      gltf.scene.traverse((child)=> {
+        if(child.name.includes('drawing')){
+          // @ts-ignore
+          child.material = new THREE.MeshBasicMaterial({
+            map:texture
+          })
+          child.rotation.set(-Math.PI/2,0,0);
+        }
+        if(child.name.includes('frame')){
+          child.scale.z = 709/1535;
+          this.frame = child;
+        }
+      })
+      this.scene.add(gltf.scene);
+    })
+
+
     // debug
     this.gui = new GUI();
-    this.gui.close();
+
+    this.gui.add(this.lilGuiAction,"animateCamera");
+    this.gui.add(this.lilGuiAction,"animateFrame");
 
     // Scene
     this.scene = new THREE.Scene();
 
-    // Object
-    this.mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1, 5, 5, 5),
-      new THREE.MeshBasicMaterial({color: 0xff0000})
-    )
-    this.gui.add(this.mesh.position,'y')
-      .min(-3)
-      .max(3)
-      .step(0.01)
-      .name('elevation');
-    this.gui.add(this.mesh,'visible');
-    this.gui.add(this.mesh.material,'wireframe');
-    this.gui.addColor(this.mesh.material,'color');
-    this.gui.add(this.parameters,'spin');
+    const directionalLight = new THREE.DirectionalLight(0xffffff,2);
+    directionalLight.position.set(1,1,1);
+    this.scene.add(directionalLight)
 
-    this.scene.add(this.mesh);
 
     // Camera
-    this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height,0.1,100);
-    this.camera.position.z = 3;
+    this.camera = new THREE.PerspectiveCamera(50, this.sizes.width / this.sizes.height,0.1,100);
+    this.camera.position.set(7,4,7);
+    this.camera.lookAt(0,0,0);
     this.scene.add(this.camera);
   }
 
@@ -81,22 +114,17 @@ export class AppComponent implements AfterViewInit{
   ngAfterViewInit(): void {
     const clock = new THREE.Clock()
 
-    const controls  = new OrbitControls(this.camera, this.canvasRef.nativeElement);
-    controls.target = this.mesh.position;
-    controls.enableDamping = true;
-
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
-      canvas: this.canvasRef.nativeElement
+      canvas: this.canvasRef.nativeElement,
+      antialias:true
     });
     this.renderer.setSize(this.sizes.width, this.sizes.height);
 
 
     const tick = () => {
 
-      // update controls
-      controls.update();
-
+      this.camera.lookAt(-1,2,0)
       // Render
       this.renderer.render(this.scene, this.camera)
 
